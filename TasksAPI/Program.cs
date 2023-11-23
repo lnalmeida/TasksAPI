@@ -27,7 +27,11 @@ app.MapGet("/", () => "API online");
 
 app.MapGet("/phrases", async () => await new HttpClient().GetStringAsync("https://api.quotable.io/random"));
 
-app.MapGet("/tasks", async (AppDbContext db) => await db.Tasks.ToListAsync());
+app.MapGet("/tasks", async (AppDbContext db) => await db.Tasks.AsNoTracking().ToListAsync());
+
+app.MapGet("/tasks/{id}", async (Guid id, AppDbContext db) => await db.Tasks.FindAsync(id) is Task task ? Results.Ok(task) : Results.NotFound());
+
+app.MapGet("tasks/completed", async (AppDbContext db) =>  await db.Tasks.AsNoTracking().Where(t => t.IsCompleted == true).ToListAsync());
 
 app.MapPost("/tasks", async (Task task, AppDbContext db) =>
 {
@@ -36,6 +40,28 @@ app.MapPost("/tasks", async (Task task, AppDbContext db) =>
     return Results.Created($"/tasks/{task.Id}", task);
 });
 
+app.MapPut("/tasks/{id}", async (Guid id, Task task, AppDbContext db) =>
+{
+    var findedtask = await db.Tasks.FindAsync(id);
+    if (findedtask is null) return Results.NotFound("Task not found.");
+    
+    findedtask.Title = task.Title;
+    findedtask.IsCompleted = task.IsCompleted; 
+    
+    db.Tasks.Update(findedtask);
+    await db.SaveChangesAsync();
+    return Results.Ok(task);
+});
+
+
+app.MapDelete("tasks/{id}", async (Guid id, AppDbContext db) =>
+{
+    var taskToDelete = await db.Tasks.FindAsync(id);
+    if (taskToDelete is null) return Results.NotFound("Task not found.");
+    db.Tasks.Remove(taskToDelete);
+    await db.SaveChangesAsync();
+    return Results.Ok(taskToDelete);
+});
 
 app.Run();
 
